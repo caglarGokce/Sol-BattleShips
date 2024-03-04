@@ -2,19 +2,15 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct GameState {
-    pub waiting_host:String,
-    pub h43:u8,
+    pub host:[u8;32],
+    pub waiting:u8,
     pub initialized:u8,
     pub gameseed:String,
     pub lamports:u64,
     pub initializer: [u8;32],
-    pub i43:u8,
-    pub initializergamehash: String,
-    pub initializergamehash43: u8,
+    pub initializergamehash: [u8;32],
     pub guest: [u8;32],
-    pub g43:u8,
-    pub guestgamehash: String,
-    pub guestgamehash43: u8,
+    pub guestgamehash: [u8;32],
     pub whoseturn:u8,
     pub lastplaytime:u64,
     pub lastmove:u8,
@@ -24,21 +20,39 @@ pub struct GameState {
     pub ghits:u8,
     pub initializer_board_state:[u8;128],
     pub guest_board_state:[u8;128],
-}//330
+}
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
+pub struct TGameState {
+    pub game_id:String,
+    pub initialized:u8,
+    pub gameseed:String,
+    pub lamports:u64,
+    pub initializer: [u8;32],
+    pub initializergamehash: [u8;32],
+    pub guest: [u8;32],
+    pub guestgamehash: [u8;32],
+    pub whoseturn:u8,
+    pub lastplaytime:u64,
+    pub lastmove:u8,
+    pub ishots:u8,
+    pub ihits:u8,
+    pub gshots:u8,
+    pub ghits:u8,
+    pub initializer_board_state:[u8;128],
+    pub guest_board_state:[u8;128],
+}
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]
 pub struct Init{
     pub seed:String,
     pub gameseed:String,
     pub lamports:u64,
-    pub initializer_game_hash:String,
-    pub igh43:u8,
+    pub initializer_game_hash:[u8;32],
     pub bump:u8
 }
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]
 pub struct Join{
     pub seed:String,
-    pub guest_game_hash:String,
-    pub ggh43:u8
+    pub guest_game_hash:[u8;32],
 }
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]
 pub struct Move{

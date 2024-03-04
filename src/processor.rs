@@ -1,6 +1,5 @@
 use crate::instruction::GameInstruction;
-use crate::state::{GameState,Init,Join,Move,ClaimVictory,Tournament,CounterFinder,FinderFinder,
-  TournamentCounter,TournamentAccount,InitTournamentCounter
+use crate::state::{ClaimVictory, CounterFinder, FinderFinder, GameState, Init, InitTournamentCounter, Join, Move, TGameState, Tournament, TournamentAccount, TournamentCounter
 };
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -108,32 +107,19 @@ impl Processor {
     if game_state.key != &game_state_check{panic!()}
     if game_state.owner != program_id{panic!()}
 
-    let mut w_h: String =String::new();
-    let w: String = String::from("1");
-    let mut h: String = host.key.to_string();
-    let mut h43: u8 = 0;
-    if h.len() == 43 {
-      h += "X";
-      h43 = 1;
-    }
-    w_h += &w;
-    w_h += &h;
-
     
     let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
 
-    if init.initializer_game_hash.len() != 44 {panic!()}/////////////////////////////////////////
     if state.initialized != 0 {panic!()}
     if init.gameseed.len() != 5 {panic!()}
 
-    state.waiting_host=w_h;
-    state.h43=h43;
+    state.host=host.key.to_bytes();
+    state.waiting=1;
     state.lamports=init.lamports;
     state.initializer= initializer.key.to_bytes();
     state.initializergamehash= init.initializer_game_hash;
-    state.initializergamehash43= init.igh43;
     state.guest= [0;32];
-    state.guestgamehash= "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX".to_string();
+    state.guestgamehash= [0;32];
     state.initialized = 1;
     state.gameseed = init.gameseed;
 
@@ -155,19 +141,17 @@ impl Processor {
     let guest: &AccountInfo<'_> = next_account_info(accounts_iter)?;
     let game_state: &AccountInfo<'_> = next_account_info(accounts_iter)?;
     let temp_account: &AccountInfo<'_> = next_account_info(accounts_iter)?;
+    let host: &AccountInfo<'_> = next_account_info(accounts_iter)?;
 
     if game_state.owner != program_id{panic!()}
 
     let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
 
-    let mut w_h: String = state.waiting_host;
+    let host_address: Pubkey = Pubkey::new_from_array(state.host);
+
+    if &host_address != host.key {panic!()}
 
     if state.initialized != 1 {panic!()}
-
-    let r: String = String::from("2");
-    let offset: usize = r.len();
-    w_h.replace_range(..offset,&r);
-
 
     let clock: Clock= Clock::get()?;
     let current_time: u64 = clock.unix_timestamp as u64;
@@ -176,8 +160,7 @@ impl Processor {
 
     state.guest = guest.key.to_bytes();
     state.guestgamehash = join.guest_game_hash;
-    state.guestgamehash43 = join.ggh43;
-    state.waiting_host = w_h;
+    state.waiting = 2;
     state.lastplaytime = current_time;
     state.whoseturn = 1;
     state.initialized = 2;
@@ -204,16 +187,10 @@ impl Processor {
 
     let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
 
-    let mut host_str: String = String::from(&state.waiting_host);
-    host_str = host_str[1..44].to_string();
-    if state.i43 == 1 {
-      host_str = host_str[..43].to_string();
-    }
-
 
     let guest_check: Pubkey = Pubkey::new_from_array(state.guest);
     let initializer_check: Pubkey = Pubkey::new_from_array(state.initializer);
-    let host_check = Pubkey::from_str(&host_str).unwrap();
+    let host_check: Pubkey = Pubkey::new_from_array(state.host);
     let game_state_check: Pubkey = Pubkey::create_with_seed(initializer.key, &state.gameseed, program_id).unwrap();
 
     if initializer.key != &initializer_check{panic!()}
@@ -278,27 +255,11 @@ impl Processor {
   
       let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
   
-      let mut host_str: String = String::from(state.waiting_host);
-      host_str = host_str[1..44].to_string();
-      if state.i43 == 1 {
-        host_str = host_str[..43].to_string();
-      }
-  
-  
-      let mut guest_game_hash_str: String = state.guestgamehash;
-      if state.guestgamehash43 == 1 {
-        guest_game_hash_str = guest_game_hash_str[..43].to_string();
-      }
-      let mut initializer_game_hash_str = state.initializergamehash;
-      if state.initializergamehash43 == 1 {
-        initializer_game_hash_str = initializer_game_hash_str[..43].to_string();
-      }
-
 
   
       let guest_check: Pubkey = Pubkey::new_from_array(state.guest);
       let initializer_check: Pubkey = Pubkey::new_from_array(state.initializer);
-      let host_check: Pubkey = Pubkey::from_str(&host_str).unwrap();
+      let host_check: Pubkey = Pubkey::new_from_array(state.host);
       let game_state_check: Pubkey = Pubkey::create_with_seed(initializer.key, &state.gameseed, program_id).unwrap();
   
       if initializer.key != &initializer_check{panic!()}
@@ -404,13 +365,14 @@ impl Processor {
       game_arr[16] = ((claim.s5coy + 1)*10)+(claim.s5cox);
     }
 
-    let game_hash = keccak::hashv(&[&claim.seed.to_string().as_bytes(),&game_arr,&claim.seed.to_string().as_bytes()]);
+    let game_hash: keccak::Hash = keccak::hashv(&[&claim.seed.to_string().as_bytes(),&game_arr,&claim.seed.to_string().as_bytes()]);
+
 
     if claim.claims == 1 {
-      if initializer_game_hash_str != game_hash.to_string(){panic!()}
+      if state.initializergamehash != game_hash.0{panic!()}
     }
     else {
-      if guest_game_hash_str != game_hash.to_string(){panic!()}
+      if state.guestgamehash != game_hash.0{panic!()}
     }
 
     if claim.claims == 1 {
@@ -498,17 +460,10 @@ impl Processor {
 
     let state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
 
-    let mut host_str: String = String::from(&state.waiting_host);
-    host_str = host_str[1..44].to_string();
-    if state.i43 == 1 {
-      host_str = host_str[..43].to_string();
-    }
-
-
 
     let guest_check: Pubkey = Pubkey::new_from_array(state.guest);
     let initializer_check: Pubkey = Pubkey::new_from_array(state.initializer);
-    let host_check: Pubkey = Pubkey::from_str(&host_str).unwrap();
+    let host_check: Pubkey = Pubkey::new_from_array(state.host);
     let game_state_check: Pubkey = Pubkey::create_with_seed(initializer.key, &state.gameseed, program_id).unwrap();
 
     if initializer.key != &initializer_check{panic!()}
@@ -781,27 +736,18 @@ impl Processor {
     if tournament.is_writable {panic!()}
 
 
-    let  mut i: String = initializer_tour_acc.key.to_string();
-    let mut i43: u8 = 0;
-    if i.len() == 43 {
-      i += "X";
-      i43 = 1;
-    }
-
-    let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
+    let mut state: TGameState = TGameState::try_from_slice(&game_state.data.borrow())?;
 
 
     if state.initialized != 0 {panic!()}
     if init.initializer_game_hash.len() != 44 {panic!()}///////////////////////////////////////////
 
-    state.waiting_host=game_id;
+    state.game_id=game_id;
     state.lamports=0;
     state.initializer= initializer_tour_acc.key.to_bytes();
-    state.i43=i43;
     state.initializergamehash= init.initializer_game_hash;
-    state.initializergamehash43= init.igh43;
     state.guest= [0;32];
-    state.guestgamehash= "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX".to_string();
+    state.guestgamehash= [0;32];
     state.initialized = 3;
 
 
@@ -839,7 +785,7 @@ impl Processor {
         if opponent.key != &opponent_check{panic!()}
     if initializer.key != &initializer_account_check{panic!()}
 
-    let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
+    let mut state: TGameState = TGameState::try_from_slice(&game_state.data.borrow())?;
 
 
     if !opponent.is_signer{panic!()}
@@ -861,7 +807,6 @@ impl Processor {
 
     state.guest = opponent.key.to_bytes();
     state.guestgamehash = join.guest_game_hash;
-    state.guestgamehash43 = join.ggh43;
     state.initialized = 4;
     state.whoseturn = 1;
 
@@ -894,7 +839,7 @@ impl Processor {
     let game_state: &AccountInfo<'_> = next_account_info(accounts_iter)?;
     let tournament: &AccountInfo<'_> = next_account_info(accounts_iter)?;
 
-    let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
+    let mut state: TGameState = TGameState::try_from_slice(&game_state.data.borrow())?;
 
     let t: Tournament = Tournament::try_from_slice(&tournament.data.borrow())?;
 
@@ -988,7 +933,7 @@ impl Processor {
     let tournament: &AccountInfo<'_> = next_account_info(accounts_iter)?;
     let host: &AccountInfo<'_> = next_account_info(accounts_iter)?;
 
-    let mut state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
+    let mut state: TGameState = TGameState::try_from_slice(&game_state.data.borrow())?;
 
     let t: Tournament = Tournament::try_from_slice(&tournament.data.borrow())?;
 
@@ -1127,20 +1072,12 @@ impl Processor {
 
     let game_hash: keccak::Hash = keccak::hashv(&[&claim.seed.to_string().as_bytes(),&game_arr,&claim.seed.to_string().as_bytes()]);
 
-    let mut guest_game_hash_str: String = state.guestgamehash;
-    if state.guestgamehash43 == 1 {
-      guest_game_hash_str = guest_game_hash_str[..43].to_string();
-    }
-    let mut initializer_game_hash_str: String = state.initializergamehash;
-    if state.initializergamehash43 == 1 {
-      initializer_game_hash_str = initializer_game_hash_str[..43].to_string();
-    }
 
     if claim.claims == 1 {
-      if initializer_game_hash_str != game_hash.to_string(){panic!()}
+      if state.initializergamehash != game_hash.0{panic!()}
     }
     else {
-      if guest_game_hash_str != game_hash.to_string(){panic!()}
+      if state.guestgamehash != game_hash.0{panic!()}
     }
 
     if claim.claims == 1 {
@@ -1396,7 +1333,7 @@ impl Processor {
     let tournament: &AccountInfo<'_> = next_account_info(accounts_iter)?;
     let host: &AccountInfo<'_> = next_account_info(accounts_iter)?;
 
-    let state: GameState = GameState::try_from_slice(&game_state.data.borrow())?;
+    let state: TGameState = TGameState::try_from_slice(&game_state.data.borrow())?;
 
     let t: Tournament = Tournament::try_from_slice(&tournament.data.borrow())?;
 
